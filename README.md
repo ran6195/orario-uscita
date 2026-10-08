@@ -1,7 +1,7 @@
 # Orario Uscita
 
 PWA mobile per calcolare l'orario di uscita dal lavoro, tenere uno storico giornaliero ed esportarlo in CSV.
-Funziona offline, senza backend: i dati restano nel browser del telefono.
+Accesso con Google, storico salvato su Firestore e sincronizzato tra dispositivi. Funziona anche offline.
 
 **App online:** https://orario-uscita.web.app
 
@@ -34,13 +34,15 @@ Le costanti (8h08, 30 min, 25 min, 16:38) sono in cima a `calc.js`.
 ```
 index.html       markup delle due schermate (Giorno, Storico)
 style.css        stili, palette e dark mode
-app.js           logica dell'interfaccia e salvataggio in localStorage
+app.js           logica dell'interfaccia, login e sincronizzazione
 calc.js          funzioni pure di calcolo orari e generazione CSV
+store.js         login Google e accesso a Firestore (SDK Firebase da CDN)
+firestore.rules  regole di sicurezza di Firestore
 sw.js            service worker (cache per l'uso offline)
 manifest.json    manifest della PWA
 icons/           icone 192 e 512 px
 tests/           test di calc.js con node:test
-firebase.json    configurazione Firebase Hosting
+firebase.json    configurazione Firebase (Hosting e regole Firestore)
 ```
 
 Nessun framework e nessun build step: HTML, CSS e JavaScript (moduli ES) serviti così come sono.
@@ -60,11 +62,11 @@ Il service worker funziona solo su `localhost` o in HTTPS: aprire `index.html` d
 
 L'app è pubblicata su Firebase Hosting (progetto `orario-uscita`).
 
-1. Aumenta la versione `CACHE` in `sw.js` (es. `mensa-helper-v6` → `mensa-helper-v7`), altrimenti i telefoni continuano a usare la versione in cache.
+1. Aumenta la versione `CACHE` in `sw.js` (es. `mensa-helper-v7` → `mensa-helper-v8`), altrimenti i telefoni continuano a usare la versione in cache.
 2. Pubblica:
    ```bash
    npx firebase-tools login   # solo la prima volta
-   npm run deploy
+   npm run deploy             # app (Hosting) + regole Firestore
    ```
 
 Le app già installate passano alla nuova versione al secondo avvio.
@@ -76,4 +78,9 @@ Le app già installate passano alla nuova versione al secondo avvio.
 
 ## Dati
 
-I giorni sono salvati in `localStorage` (chiave `mensa_helper.giorni`) solo sul dispositivo in uso: non si sincronizzano tra dispositivi e si perdono se cancelli i dati del sito. Usa "Esporta CSV" per tenerne una copia.
+- Al primo avvio si accede con Google. I giorni sono salvati su Firestore in `users/{uid}/giorni/{AAAA-MM-GG}`.
+- Le regole in `firestore.rules` permettono a ogni utente di leggere e scrivere solo i propri giorni.
+- Firestore tiene una copia locale (IndexedDB): l'app funziona offline e sincronizza al ritorno della rete.
+- Le modifiche vengono scritte circa un secondo dopo l'ultima modifica, oppure subito se l'app va in background.
+- Al primo login i giorni salvati in `localStorage` dalla versione precedente vengono copiati su Firestore (solo se mancano o sono più recenti). La copia locale non viene cancellata.
+- La configurazione Firebase in `store.js` è pubblica per natura: la protezione dei dati è affidata alle regole.

@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Ogni utente legge e scrive solo i propri giorni.
+    match /users/{uid}/giorni/{data} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && data.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.data == data
+        && request.resource.data.keys().hasOnly([
+             'data', 'entrata', 'inizio_mensa', 'fine_mensa', 'durata_pausa_min',
+             'minuti_extra', 'uscita_calcolata', 'ultimo_aggiornamento'
+           ])
+        && request.resource.data.entrata is string
+        && request.resource.data.inizio_mensa is string
+        && request.resource.data.fine_mensa is string
+        && request.resource.data.uscita_calcolata is string
+        && request.resource.data.minuti_extra is int
+        && (request.resource.data.durata_pausa_min == null || request.resource.data.durata_pausa_min is int)
+        && request.resource.data.ultimo_aggiornamento is string;
+    }
+
+    // Tutto il resto è negato.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

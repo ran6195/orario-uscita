@@ -440,3 +440,56 @@ main { padding: 8px 20px 32px; }
 }
 
 .empty { text-align: center; color: var(--muted); margin: 24px 0 0; }
+
+/* ---------- Account, login, caricamento ---------- */
+
+.account {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.account-email {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-btn {
+  border: 0;
+  background: var(--accent-soft);
+  color: var(--accent-soft-text);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 16px;
+  min-height: 44px;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.login-text { margin: 0; font-size: 17px; line-height: 1.5; color: var(--hero-text); }
+
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: #2B1D14;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.google-btn:disabled { opacity: 0.6; cursor: default; }
+
+.loading { text-align: center; color: var(--muted); margin: 48px 0 0; }

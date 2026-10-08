@@ -9,8 +9,10 @@ import {
   INIZIO_MENSA_DEFAULT,
   FINE_MENSA_DEFAULT,
 } from './calc.js';
+import * as store from './store.js';
 
-const STORAGE_KEY = 'mensa_helper.giorni';
+const STORAGE_KEY = 'mensa_helper.giorni'; // storico locale della versione precedente (solo migrazione)
+const SALVA_DOPO_MS = 800;
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -43,32 +45,77 @@ const el = {
   esporta: $('esporta'),
   timerMensa: $('timer-mensa'),
   timerMensaTesto: $('timer-mensa-testo'),
+  tabs: $('tabs'),
+  viewLogin: $('view-login'),
+  caricamento: $('caricamento'),
+  accedi: $('accedi'),
+  loginErrore: $('login-errore'),
+  accountEmail: $('account-email'),
+  esci: $('esci'),
 };
 
 let vistaCorrente = 'oggi';
 let uscitaCorrenteMin = null;
+
+let utente = null;
+let stopGiorni = null;
+let giorni = {}; // copia in memoria dei giorni dell'utente, aggiornata da Firestore
+let scritturePendenti = false;
+let salvataggio = null; // { timer, record } in attesa di essere scritto
 
 const ICONA_CESTINO = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" '
   + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
   + '<path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/>'
   + '<path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>';
 
-// ---------- Persistenza (un record per data, chiave AAAA-MM-GG) ----------
+// ---------- Persistenza (Firestore, un documento per data AAAA-MM-GG) ----------
 
 function caricaTutti() {
+  return giorni;
+}
+
+function scriviGiorno(record) {
+  if (salvataggio) clearTimeout(salvataggio.timer);
+  salvataggio = {
+    record,
+    timer: setTimeout(scriviOra, SALVA_DOPO_MS),
+  };
+}
+
+// Firestore conserva la scrittura in locale e la invia appena c'è rete.
+function scriviOra() {
+  if (!salvataggio || !utente) return;
+  clearTimeout(salvataggio.timer);
+  const { record } = salvataggio;
+  salvataggio = null;
+  store.salvaGiorno(utente.uid, record).catch((e) => {
+    console.error(e);
+    mostraSalvato('Errore di salvataggio');
+  });
+}
+
+function leggiLocale() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    return Object.values(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {});
   } catch {
-    return {};
+    return [];
   }
 }
 
-function salvaTutti(giorni) {
+async function migraLocale(uid) {
+  const chiave = `mensa_helper.migrato.${uid}`;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(giorni));
-    return true;
+    if (localStorage.getItem(chiave)) return;
   } catch {
-    return false;
+    return;
+  }
+  const locali = leggiLocale();
+  try {
+    await store.migraDaLocale(uid, locali);
+    localStorage.setItem(chiave, new Date().toISOString());
+  } catch (e) {
+    // Offline o errore: si riprova al prossimo avvio. I dati locali restano intatti.
+    console.warn('Migrazione rimandata', e);
   }
 }
 
@@ -109,9 +156,14 @@ function caricaGiorno(data) {
   el.entrata.value = r?.entrata ?? '';
   el.inizio.value = r?.inizio_mensa ?? INIZIO_MENSA_DEFAULT;
   el.fine.value = r?.fine_mensa ?? FINE_MENSA_DEFAULT;
-  mostraSalvato(r ? `Salvato ${oraDa(r.ultimo_aggiornamento)}` : '');
+  mostraSalvato(r ? testoSalvato(r.ultimo_aggiornamento) : '');
   aggiornaEyebrow();
   aggiorna(false);
+}
+
+function testoSalvato(iso) {
+  const offline = scritturePendenti && !navigator.onLine;
+  return `Salvato ${oraDa(iso)}${offline ? ' · offline' : ''}`;
 }
 
 function mostraSalvato(testo) {
@@ -163,12 +215,11 @@ function aggiorna(salva = true) {
 function salvaGiorno(r) {
   const data = el.data.value;
   if (!data) return;
-  const giorni = caricaTutti();
   // Non creare record vuoti: si salva solo se c'è l'entrata o il giorno esiste già.
   if (!el.entrata.value && !giorni[data]) return;
 
   const adesso = new Date().toISOString();
-  giorni[data] = {
+  const record = {
     data,
     entrata: el.entrata.value,
     inizio_mensa: el.inizio.value,
@@ -178,7 +229,9 @@ function salvaGiorno(r) {
     uscita_calcolata: r.uscita,
     ultimo_aggiornamento: adesso,
   };
-  mostraSalvato(salvaTutti(giorni) ? `Salvato ${oraDa(adesso)}` : 'Non salvato');
+  giorni[data] = record;
+  scriviGiorno(record);
+  mostraSalvato(testoSalvato(adesso));
 }
 
 // ---------- Countdown, avanzamento e timer mensa (solo per il giorno di oggi) ----------
@@ -294,9 +347,12 @@ function renderStorico() {
     del.setAttribute('aria-label', `Elimina ${formatDataIt(r.data)}`);
     del.addEventListener('click', () => {
       if (!confirm(`Eliminare il giorno ${formatDataIt(r.data)}?`)) return;
-      const giorni = caricaTutti();
+      if (salvataggio?.record.data === r.data) {
+        clearTimeout(salvataggio.timer);
+        salvataggio = null;
+      }
       delete giorni[r.data];
-      salvaTutti(giorni);
+      store.eliminaGiorno(utente.uid, r.data).catch((e) => console.error(e));
       if (el.data.value === r.data) caricaGiorno(r.data);
       renderStorico();
     });
@@ -356,7 +412,115 @@ el.tabOggi.addEventListener('click', () => mostraVista('oggi'));
 el.tabStorico.addEventListener('click', () => mostraVista('storico'));
 el.esporta.addEventListener('click', esportaCsv);
 
-caricaGiorno(oggiISO());
+// Salva subito le modifiche in sospeso se l'app va in background o viene chiusa.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') scriviOra();
+});
+window.addEventListener('pagehide', scriviOra);
+window.addEventListener('online', () => {
+  if (giorni[el.data.value]) mostraSalvato(testoSalvato(giorni[el.data.value].ultimo_aggiornamento));
+});
+
+// ---------- Login e sincronizzazione ----------
+
+function mostraSchermata(schermata) {
+  el.caricamento.hidden = schermata !== 'caricamento';
+  el.viewLogin.hidden = schermata !== 'login';
+  el.tabs.hidden = schermata !== 'app';
+  if (schermata === 'app') {
+    mostraVista(vistaCorrente);
+  } else {
+    el.viewOggi.hidden = true;
+    el.viewStorico.hidden = true;
+    el.eyebrow.textContent = '';
+  }
+}
+
+function inputAttivo() {
+  return document.activeElement?.tagName === 'INPUT';
+}
+
+function suGiorni(nuovi, { remoti, pendenti }) {
+  const primoCaricamento = !suGiorni.caricato;
+  giorni = nuovi;
+  scritturePendenti = pendenti;
+  // Una modifica locale non ancora scritta ha la precedenza su quella in arrivo.
+  if (salvataggio) giorni[salvataggio.record.data] = salvataggio.record;
+
+  if (primoCaricamento) {
+    suGiorni.caricato = true;
+    caricaGiorno(el.data.value || oggiISO());
+    mostraSchermata('app');
+  } else if (remoti.includes(el.data.value) && !salvataggio && !inputAttivo()) {
+    // Il giorno aperto è stato modificato da un altro dispositivo.
+    caricaGiorno(el.data.value);
+  } else if (giorni[el.data.value]) {
+    mostraSalvato(testoSalvato(giorni[el.data.value].ultimo_aggiornamento));
+  }
+  if (vistaCorrente === 'storico' && !el.viewStorico.hidden) renderStorico();
+}
+
+store.osservaUtente(async (u) => {
+  if (stopGiorni) {
+    stopGiorni();
+    stopGiorni = null;
+  }
+  scriviOra();
+  utente = u;
+  giorni = {};
+  suGiorni.caricato = false;
+
+  if (!u) {
+    mostraSchermata('login');
+    return;
+  }
+
+  el.accountEmail.textContent = u.email || u.displayName || '';
+  mostraSchermata('caricamento');
+  await migraLocale(u.uid);
+  if (utente !== u) return; // nel frattempo è cambiato utente
+  stopGiorni = store.osservaGiorni(u.uid, suGiorni, (e) => {
+    console.error(e);
+    el.loginErrore.textContent = 'Impossibile leggere i dati. Riprova più tardi.';
+    el.loginErrore.hidden = false;
+    mostraSchermata('login');
+  });
+});
+
+store.erroreRedirect().then((e) => {
+  if (e) mostraErroreLogin(e);
+});
+
+function mostraErroreLogin(e) {
+  console.error(e);
+  const msg = {
+    'auth/network-request-failed': 'Serve una connessione a internet per accedere.',
+    'auth/unauthorized-domain': 'Questo indirizzo non è autorizzato per l\'accesso.',
+  }[e?.code] || 'Accesso non riuscito. Riprova.';
+  el.loginErrore.textContent = msg;
+  el.loginErrore.hidden = false;
+}
+
+el.accedi.addEventListener('click', async () => {
+  el.loginErrore.hidden = true;
+  el.accedi.disabled = true;
+  try {
+    await store.accedi();
+  } catch (e) {
+    if (e?.code !== 'auth/popup-closed-by-user' && e?.code !== 'auth/cancelled-popup-request') mostraErroreLogin(e);
+  } finally {
+    el.accedi.disabled = false;
+  }
+});
+
+el.esci.addEventListener('click', () => {
+  if (!confirm('Uscire dall\'account?')) return;
+  scriviOra();
+  vistaCorrente = 'oggi';
+  store.esci();
+});
+
+mostraSchermata('caricamento');
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
