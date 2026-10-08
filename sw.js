@@ -1,5 +1,5 @@
 // Incrementa la versione a ogni rilascio per aggiornare la cache.
-const CACHE = 'mensa-helper-v8';
+const CACHE = 'mensa-helper-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -28,28 +28,45 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Cache-first per gli asset dell'app, i font e l'SDK Firebase: l'app funziona offline.
-// Le chiamate a Firestore e al login non passano dalla cache.
-function daCache(url) {
+// File dell'app: prima la rete (versione sempre coerente), la cache se offline o lenta.
+// Font e SDK Firebase (URL con versione): prima la cache.
+// Le chiamate a Firestore e al login non passano dal service worker.
+const ATTESA_RETE_MS = 4000;
+
+function daGestire(url) {
   if (url.origin === self.location.origin) return !url.pathname.startsWith('/__/');
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') return true;
   return url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/');
 }
 
+async function primaRete(request) {
+  const c = await caches.open(CACHE);
+  try {
+    const res = await Promise.race([
+      fetch(request),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ATTESA_RETE_MS)),
+    ]);
+    if (res.ok) await c.put(request, res.clone());
+    return res;
+  } catch (e) {
+    const cached = await c.match(request, { ignoreSearch: true });
+    if (cached) return cached;
+    throw e;
+  }
+}
+
+async function primaCache(request) {
+  const c = await caches.open(CACHE);
+  const cached = await c.match(request);
+  if (cached) return cached;
+  const res = await fetch(request);
+  if (res.ok || res.type === 'opaque') await c.put(request, res.clone());
+  return res;
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
-  if (!daCache(url)) return;
-  const stessaOrigine = url.origin === self.location.origin;
-  event.respondWith(
-    caches.match(event.request, { ignoreSearch: stessaOrigine }).then(
-      (cached) => cached || fetch(event.request).then((res) => {
-        if (res.ok || (!stessaOrigine && res.type === 'opaque')) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(event.request, copy));
-        }
-        return res;
-      })
-    )
-  );
+  if (!daGestire(url)) return;
+  event.respondWith(url.origin === self.location.origin ? primaRete(event.request) : primaCache(event.request));
 });

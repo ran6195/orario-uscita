@@ -121,7 +121,7 @@ async function migraLocale(uid) {
   }
   const locali = leggiLocale();
   try {
-    await store.migraDaLocale(uid, locali);
+    await conTimeout(store.migraDaLocale(uid, locali));
     localStorage.setItem(chiave, new Date().toISOString());
   } catch (e) {
     // Offline o errore: si riprova al prossimo avvio. I dati locali restano intatti.
@@ -451,6 +451,12 @@ function inputAttivo() {
   return document.activeElement?.tagName === 'INPUT';
 }
 
+function apriApp() {
+  suGiorni.caricato = true;
+  caricaGiorno(el.data.value || oggiISO());
+  mostraSchermata('app');
+}
+
 function suGiorni(nuovi, { remoti, pendenti }) {
   const primoCaricamento = !suGiorni.caricato;
   giorni = nuovi;
@@ -459,9 +465,7 @@ function suGiorni(nuovi, { remoti, pendenti }) {
   if (salvataggio) giorni[salvataggio.record.data] = salvataggio.record;
 
   if (primoCaricamento) {
-    suGiorni.caricato = true;
-    caricaGiorno(el.data.value || oggiISO());
-    mostraSchermata('app');
+    apriApp();
   } else if (remoti.includes(el.data.value) && !salvataggio && !inputAttivo()) {
     // Il giorno aperto è stato modificato da un altro dispositivo.
     caricaGiorno(el.data.value);
@@ -484,9 +488,19 @@ function invitoInMemoria(uid, valore) {
   return valore;
 }
 
+const ATTESA_MAX_MS = 8000;
+
+function conTimeout(promessa, ms = ATTESA_MAX_MS) {
+  let timer;
+  return Promise.race([
+    promessa,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 async function verificaInvito(u) {
   try {
-    return invitoInMemoria(u.uid, await store.haInvito(u));
+    return invitoInMemoria(u.uid, await conTimeout(store.haInvito(u)));
   } catch (e) {
     console.warn('Verifica invito non riuscita', e);
     return invitoInMemoria(u.uid) ? true : null;
@@ -514,72 +528,7 @@ store.osservaUtente(async (u) => {
   }
 
   el.accountEmail.textContent = u.email || u.displayName || '';
-  // ---------- Inviti (solo amministratore) ----------
-
-function avviaInviti() {
-  el.inviti.hidden = false;
-  stopInviti = store.osservaInviti((lista) => {
-    inviti = lista;
-    renderInviti();
-  }, (e) => {
-    console.error(e);
-    mostraMsgInvito('Impossibile leggere gli inviti.', true);
-  });
-}
-
-function mostraMsgInvito(testo, errore = false) {
-  el.invitoMsg.textContent = testo;
-  el.invitoMsg.classList.toggle('errore', errore);
-  el.invitoMsg.hidden = !testo;
-}
-
-function renderInviti() {
-  el.invitiLista.replaceChildren();
-  if (!inviti.length) {
-    const li = crea('li');
-    li.append(crea('span', 'vuoto', 'Nessun invito.'));
-    el.invitiLista.append(li);
-    return;
-  }
-  for (const email of inviti) {
-    const li = crea('li');
-    const del = crea('button', 'delete');
-    del.type = 'button';
-    del.innerHTML = ICONA_CESTINO;
-    del.title = 'Revoca invito';
-    del.setAttribute('aria-label', `Revoca invito a ${email}`);
-    del.addEventListener('click', () => {
-      if (!confirm(`Revocare l'invito a ${email}? Non potrà più accedere ai suoi dati.`)) return;
-      store.rimuoviInvito(email).catch((e) => {
-        console.error(e);
-        mostraMsgInvito('Revoca non riuscita.', true);
-      });
-    });
-    li.append(crea('span', 'email', email), del);
-    el.invitiLista.append(li);
-  }
-}
-
-el.formInvito.addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const email = store.normalizzaEmail(el.emailInvito.value);
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    mostraMsgInvito('Inserisci un indirizzo email valido.', true);
-    return;
-  }
-  if (inviti.includes(email)) {
-    mostraMsgInvito(`${email} è già invitato.`);
-    return;
-  }
-  el.emailInvito.value = '';
-  mostraMsgInvito(`Invito aggiunto. Manda a ${email} il link https://orario-uscita.web.app`);
-  store.aggiungiInvito(email).catch((e) => {
-    console.error(e);
-    mostraMsgInvito('Invito non riuscito.', true);
-  });
-});
-
-mostraSchermata('caricamento');
+  mostraSchermata('caricamento');
 
   const invitato = await verificaInvito(u);
   if (utente !== u) return;
@@ -600,6 +549,10 @@ mostraSchermata('caricamento');
     el.loginErrore.hidden = false;
     mostraSchermata('login');
   });
+  // Se i dati tardano, si apre comunque l'app: arriveranno appena pronti.
+  setTimeout(() => {
+    if (utente === u && !suGiorni.caricato) apriApp();
+  }, 3000);
 });
 
 store.erroreRedirect().then((e) => {
@@ -628,13 +581,22 @@ el.accedi.addEventListener('click', async () => {
   }
 });
 
-el.noInvitoEsci.addEventListener('click', () => store.esci());
+// Dopo l'uscita si ricarica la pagina: il prossimo accesso riparte da uno stato pulito
+// (listener e cache di Firestore inclusi).
+async function esciEricarica() {
+  scriviOra();
+  try {
+    await store.esci();
+  } finally {
+    location.reload();
+  }
+}
+
+el.noInvitoEsci.addEventListener('click', esciEricarica);
 
 el.esci.addEventListener('click', () => {
   if (!confirm('Uscire dall\'account?')) return;
-  scriviOra();
-  vistaCorrente = 'oggi';
-  store.esci();
+  esciEricarica();
 });
 
 // ---------- Inviti (solo amministratore) ----------
@@ -701,6 +663,15 @@ el.formInvito.addEventListener('submit', async (ev) => {
     mostraMsgInvito('Invito non riuscito.', true);
   });
 });
+
+// Se qualcosa si rompe durante l'avvio, lo si mostra invece di restare su "Caricamento…".
+function erroreAvvio(err) {
+  if (el.caricamento.hidden) return;
+  console.error(err);
+  el.caricamento.textContent = `Errore durante l'avvio: ${err?.message || err}. Chiudi e riapri l'app.`;
+}
+window.addEventListener('error', (e) => erroreAvvio(e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => erroreAvvio(e.reason));
 
 mostraSchermata('caricamento');
 
