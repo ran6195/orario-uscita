@@ -6,6 +6,7 @@
       ".firebaserc",
       "package.json",
       "package-lock.json",
+      "README.md",
       "tests/**",
       "**/.*",
       "**/node_modules/**"
