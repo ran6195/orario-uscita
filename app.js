@@ -277,12 +277,17 @@ function aggiornaTimerMensa() {
 
 // Timer dell'Orologio (visibile nella Dynamic Island) avviato tramite un comando dell'app Comandi.
 const NOME_COMANDO_TIMER = 'Timer uscita';
+const ANTICIPO_TIMER_MIN = 7; // il timer suona questi minuti prima dell'uscita
 const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+function secondiTimerIos() {
+  return (uscitaCorrenteMin - ANTICIPO_TIMER_MIN) * 60 - secondiAdesso();
+}
+
 function avviaTimerIos() {
   if (uscitaCorrenteMin == null) return;
-  const secondi = uscitaCorrenteMin * 60 - secondiAdesso();
+  const secondi = secondiTimerIos();
   if (secondi <= 0) return;
   location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(NOME_COMANDO_TIMER)}`
     + `&input=text&text=${secondi}`;
@@ -308,7 +313,7 @@ function aggiornaTempo() {
   el.tileCountdown.classList.toggle('done', finito);
   el.countdownLabel.textContent = finito ? 'Puoi uscire' : 'Mancano';
   el.countdownValue.textContent = t.testo;
-  el.timerIos.hidden = !IOS || finito;
+  el.timerIos.hidden = !IOS || secondiTimerIos() <= 0;
 
   const totale = (uscitaCorrenteMin - entrataMin) * 60;
   const trascorso = adessoSec - entrataMin * 60;

@@ -62,7 +62,7 @@ Il service worker funziona solo su `localhost` o in HTTPS: aprire `index.html` d
 
 L'app è pubblicata su Firebase Hosting (progetto `orario-uscita`).
 
-1. Aumenta la versione `CACHE` in `sw.js` (es. `mensa-helper-v10` → `mensa-helper-v11`), altrimenti i telefoni continuano a usare la versione in cache.
+1. Aumenta la versione `CACHE` in `sw.js` (es. `mensa-helper-v11` → `mensa-helper-v12`), altrimenti i telefoni continuano a usare la versione in cache.
 2. Pubblica:
    ```bash
    npx firebase-tools login   # solo la prima volta
