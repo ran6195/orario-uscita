@@ -52,6 +52,14 @@ const el = {
   loginErrore: $('login-errore'),
   accountEmail: $('account-email'),
   esci: $('esci'),
+  viewNoInvito: $('view-noinvito'),
+  noInvitoTesto: $('noinvito-testo'),
+  noInvitoEsci: $('noinvito-esci'),
+  inviti: $('inviti'),
+  formInvito: $('form-invito'),
+  emailInvito: $('email-invito'),
+  invitoMsg: $('invito-msg'),
+  invitiLista: $('inviti-lista'),
 };
 
 let vistaCorrente = 'oggi';
@@ -59,6 +67,8 @@ let uscitaCorrenteMin = null;
 
 let utente = null;
 let stopGiorni = null;
+let stopInviti = null;
+let inviti = [];
 let giorni = {}; // copia in memoria dei giorni dell'utente, aggiornata da Firestore
 let scritturePendenti = false;
 let salvataggio = null; // { timer, record } in attesa di essere scritto
@@ -426,6 +436,7 @@ window.addEventListener('online', () => {
 function mostraSchermata(schermata) {
   el.caricamento.hidden = schermata !== 'caricamento';
   el.viewLogin.hidden = schermata !== 'login';
+  el.viewNoInvito.hidden = schermata !== 'noinvito';
   el.tabs.hidden = schermata !== 'app';
   if (schermata === 'app') {
     mostraVista(vistaCorrente);
@@ -460,11 +471,38 @@ function suGiorni(nuovi, { remoti, pendenti }) {
   if (vistaCorrente === 'storico' && !el.viewStorico.hidden) renderStorico();
 }
 
+// Esito dell'ultima verifica dell'invito, per poter aprire l'app anche offline.
+function invitoInMemoria(uid, valore) {
+  const chiave = `mensa_helper.invitato.${uid}`;
+  try {
+    if (valore === undefined) return localStorage.getItem(chiave) === '1';
+    if (valore) localStorage.setItem(chiave, '1');
+    else localStorage.removeItem(chiave);
+  } catch {
+    return false;
+  }
+  return valore;
+}
+
+async function verificaInvito(u) {
+  try {
+    return invitoInMemoria(u.uid, await store.haInvito(u));
+  } catch (e) {
+    console.warn('Verifica invito non riuscita', e);
+    return invitoInMemoria(u.uid) ? true : null;
+  }
+}
+
 store.osservaUtente(async (u) => {
   if (stopGiorni) {
     stopGiorni();
     stopGiorni = null;
   }
+  if (stopInviti) {
+    stopInviti();
+    stopInviti = null;
+  }
+  el.inviti.hidden = true;
   scriviOra();
   utente = u;
   giorni = {};
@@ -476,7 +514,84 @@ store.osservaUtente(async (u) => {
   }
 
   el.accountEmail.textContent = u.email || u.displayName || '';
-  mostraSchermata('caricamento');
+  // ---------- Inviti (solo amministratore) ----------
+
+function avviaInviti() {
+  el.inviti.hidden = false;
+  stopInviti = store.osservaInviti((lista) => {
+    inviti = lista;
+    renderInviti();
+  }, (e) => {
+    console.error(e);
+    mostraMsgInvito('Impossibile leggere gli inviti.', true);
+  });
+}
+
+function mostraMsgInvito(testo, errore = false) {
+  el.invitoMsg.textContent = testo;
+  el.invitoMsg.classList.toggle('errore', errore);
+  el.invitoMsg.hidden = !testo;
+}
+
+function renderInviti() {
+  el.invitiLista.replaceChildren();
+  if (!inviti.length) {
+    const li = crea('li');
+    li.append(crea('span', 'vuoto', 'Nessun invito.'));
+    el.invitiLista.append(li);
+    return;
+  }
+  for (const email of inviti) {
+    const li = crea('li');
+    const del = crea('button', 'delete');
+    del.type = 'button';
+    del.innerHTML = ICONA_CESTINO;
+    del.title = 'Revoca invito';
+    del.setAttribute('aria-label', `Revoca invito a ${email}`);
+    del.addEventListener('click', () => {
+      if (!confirm(`Revocare l'invito a ${email}? Non potrà più accedere ai suoi dati.`)) return;
+      store.rimuoviInvito(email).catch((e) => {
+        console.error(e);
+        mostraMsgInvito('Revoca non riuscita.', true);
+      });
+    });
+    li.append(crea('span', 'email', email), del);
+    el.invitiLista.append(li);
+  }
+}
+
+el.formInvito.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const email = store.normalizzaEmail(el.emailInvito.value);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    mostraMsgInvito('Inserisci un indirizzo email valido.', true);
+    return;
+  }
+  if (inviti.includes(email)) {
+    mostraMsgInvito(`${email} è già invitato.`);
+    return;
+  }
+  el.emailInvito.value = '';
+  mostraMsgInvito(`Invito aggiunto. Manda a ${email} il link https://orario-uscita.web.app`);
+  store.aggiungiInvito(email).catch((e) => {
+    console.error(e);
+    mostraMsgInvito('Invito non riuscito.', true);
+  });
+});
+
+mostraSchermata('caricamento');
+
+  const invitato = await verificaInvito(u);
+  if (utente !== u) return;
+  if (!invitato) {
+    el.noInvitoTesto.textContent = invitato === null
+      ? 'Non è stato possibile verificare il tuo invito. Collegati a internet e riapri l\'app.'
+      : `L'account ${u.email || ''} non è stato invitato. Chiedi un invito all'amministratore dell'app.`;
+    mostraSchermata('noinvito');
+    return;
+  }
+  if (store.isAdmin(u)) avviaInviti();
+
   await migraLocale(u.uid);
   if (utente !== u) return; // nel frattempo è cambiato utente
   stopGiorni = store.osservaGiorni(u.uid, suGiorni, (e) => {
@@ -513,11 +628,78 @@ el.accedi.addEventListener('click', async () => {
   }
 });
 
+el.noInvitoEsci.addEventListener('click', () => store.esci());
+
 el.esci.addEventListener('click', () => {
   if (!confirm('Uscire dall\'account?')) return;
   scriviOra();
   vistaCorrente = 'oggi';
   store.esci();
+});
+
+// ---------- Inviti (solo amministratore) ----------
+
+function avviaInviti() {
+  el.inviti.hidden = false;
+  stopInviti = store.osservaInviti((lista) => {
+    inviti = lista;
+    renderInviti();
+  }, (e) => {
+    console.error(e);
+    mostraMsgInvito('Impossibile leggere gli inviti.', true);
+  });
+}
+
+function mostraMsgInvito(testo, errore = false) {
+  el.invitoMsg.textContent = testo;
+  el.invitoMsg.classList.toggle('errore', errore);
+  el.invitoMsg.hidden = !testo;
+}
+
+function renderInviti() {
+  el.invitiLista.replaceChildren();
+  if (!inviti.length) {
+    const li = crea('li');
+    li.append(crea('span', 'vuoto', 'Nessun invito.'));
+    el.invitiLista.append(li);
+    return;
+  }
+  for (const email of inviti) {
+    const li = crea('li');
+    const del = crea('button', 'delete');
+    del.type = 'button';
+    del.innerHTML = ICONA_CESTINO;
+    del.title = 'Revoca invito';
+    del.setAttribute('aria-label', `Revoca invito a ${email}`);
+    del.addEventListener('click', () => {
+      if (!confirm(`Revocare l'invito a ${email}? Non potrà più accedere ai suoi dati.`)) return;
+      store.rimuoviInvito(email).catch((e) => {
+        console.error(e);
+        mostraMsgInvito('Revoca non riuscita.', true);
+      });
+    });
+    li.append(crea('span', 'email', email), del);
+    el.invitiLista.append(li);
+  }
+}
+
+el.formInvito.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const email = store.normalizzaEmail(el.emailInvito.value);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    mostraMsgInvito('Inserisci un indirizzo email valido.', true);
+    return;
+  }
+  if (inviti.includes(email)) {
+    mostraMsgInvito(`${email} è già invitato.`);
+    return;
+  }
+  el.emailInvito.value = '';
+  mostraMsgInvito(`Invito aggiunto. Manda a ${email} il link https://orario-uscita.web.app`);
+  store.aggiungiInvito(email).catch((e) => {
+    console.error(e);
+    mostraMsgInvito('Invito non riuscito.', true);
+  });
 });
 
 mostraSchermata('caricamento');

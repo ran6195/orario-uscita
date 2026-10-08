@@ -17,6 +17,7 @@ import {
   persistentMultipleTabManager,
   collection,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -45,6 +46,10 @@ const db = initializeFirestore(app, {
 });
 
 const giorniRef = (uid) => collection(db, 'users', uid, 'giorni');
+const invitiRef = () => collection(db, 'inviti');
+
+// Amministratore degli inviti (stesso UID della funzione admin() in firestore.rules).
+const ADMIN_UID = 'EHdWC7e44TZIzsgIuy9STAi6SuO2';
 
 // ---------- Autenticazione ----------
 
@@ -74,6 +79,44 @@ export async function accedi() {
 
 export function esci() {
   return signOut(auth);
+}
+
+// ---------- Inviti ----------
+
+export const normalizzaEmail = (email) => (email || '').trim().toLowerCase();
+
+export function isAdmin(user) {
+  return user?.uid === ADMIN_UID;
+}
+
+/**
+ * true se l'utente è invitato, false se non lo è.
+ * Lancia un errore se non è possibile verificarlo (es. offline al primo accesso).
+ */
+export async function haInvito(user) {
+  if (isAdmin(user)) return true;
+  if (!user.emailVerified || !user.email) return false;
+  try {
+    return (await getDoc(doc(invitiRef(), normalizzaEmail(user.email)))).exists();
+  } catch (e) {
+    if (e?.code === 'permission-denied') return false;
+    throw e;
+  }
+}
+
+/** Solo amministratore: callback(email[]) ordinate alfabeticamente. */
+export function osservaInviti(callback, onError) {
+  return onSnapshot(invitiRef(), (snap) => {
+    callback(snap.docs.map((d) => d.id).sort());
+  }, onError);
+}
+
+export function aggiungiInvito(email) {
+  return setDoc(doc(invitiRef(), normalizzaEmail(email)), { creato: new Date().toISOString() });
+}
+
+export function rimuoviInvito(email) {
+  return deleteDoc(doc(invitiRef(), email));
 }
 
 // ---------- Giorni ----------

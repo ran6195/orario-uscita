@@ -1,5 +1,5 @@
 // Incrementa la versione a ogni rilascio per aggiornare la cache.
-const CACHE = 'mensa-helper-v7';
+const CACHE = 'mensa-helper-v8';
 const ASSETS = [
   './',
   './index.html',

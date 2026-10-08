@@ -3,12 +3,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Ogni utente legge e scrive solo i propri giorni.
+    // Amministratore: gestisce gli inviti (stesso UID di ADMIN_UID in store.js).
+    function admin() {
+      return request.auth != null && request.auth.uid == 'EHdWC7e44TZIzsgIuy9STAi6SuO2';
+    }
+
+    function emailVerificata() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function emailUtente() {
+      return request.auth.token.email.lower();
+    }
+
+    // Accesso consentito solo agli invitati (documento inviti/{email}) e all'amministratore.
+    function invitato() {
+      return admin()
+        || (emailVerificata() && exists(/databases/$(database)/documents/inviti/$(emailUtente())));
+    }
+
+    // Inviti: ID documento = email in minuscolo. Ognuno può controllare solo il proprio invito.
+    match /inviti/{email} {
+      allow get: if admin() || (emailVerificata() && emailUtente() == email);
+      allow list, delete: if admin();
+      allow create: if admin()
+        && email == email.lower()
+        && email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && request.resource.data.keys().hasOnly(['creato'])
+        && request.resource.data.creato is string;
+    }
+
+    // Ogni utente invitato legge e scrive solo i propri giorni.
     match /users/{uid}/giorni/{data} {
-      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow read, delete: if request.auth != null && request.auth.uid == uid && invitato();
 
       allow create, update: if request.auth != null
         && request.auth.uid == uid
+        && invitato()
         && data.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.data == data
         && request.resource.data.keys().hasOnly([

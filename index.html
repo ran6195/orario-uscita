@@ -45,6 +45,14 @@
       </div>
     </section>
 
+    <section id="view-noinvito" class="view" hidden>
+      <div class="result login">
+        <span class="result-label">Accesso su invito</span>
+        <p class="login-text" id="noinvito-testo"></p>
+        <button type="button" class="google-btn" id="noinvito-esci">Esci e usa un altro account</button>
+      </div>
+    </section>
+
     <section id="view-oggi" class="view" role="tabpanel" aria-labelledby="tab-oggi" hidden>
       <div class="result">
         <div class="result-head">
@@ -121,6 +129,17 @@
       </div>
       <ul class="history" id="lista-storico"></ul>
       <p class="empty" id="storico-vuoto" hidden>Nessun giorno salvato.</p>
+      <div class="card inviti" id="inviti" hidden>
+        <span class="card-title">Inviti</span>
+        <form class="invito-form" id="form-invito" autocomplete="off" novalidate>
+          <label class="sr-only" for="email-invito">Email da invitare</label>
+          <input type="email" id="email-invito" placeholder="nome@esempio.it" inputmode="email" autocapitalize="off" spellcheck="false">
+          <button type="submit" class="pill-btn">Invita</button>
+        </form>
+        <p class="invito-msg" id="invito-msg" role="status" hidden></p>
+        <ul class="inviti-lista" id="inviti-lista"></ul>
+      </div>
+
       <div class="account">
         <span class="account-email" id="account-email"></span>
         <button type="button" class="account-btn" id="esci">Esci</button>

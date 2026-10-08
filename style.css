@@ -493,3 +493,71 @@ main { padding: 8px 20px 32px; }
 .google-btn:disabled { opacity: 0.6; cursor: default; }
 
 .loading { text-align: center; color: var(--muted); margin: 48px 0 0; }
+
+/* ---------- Inviti (amministratore) ---------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.inviti { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+
+.invito-form { display: flex; gap: 8px; }
+
+.invito-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--field-bg);
+  color: var(--text);
+  font-size: 16px;
+}
+
+.invito-form .pill-btn { min-height: 44px; flex-shrink: 0; }
+
+.invito-msg { margin: 0; font-size: 13px; color: var(--muted); }
+.invito-msg.errore { color: var(--danger); font-weight: 600; }
+
+.inviti-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+.inviti-lista li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  border-top: 1px solid var(--divider);
+}
+
+.inviti-lista .email {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inviti-lista .delete {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.inviti-lista .vuoto { color: var(--muted); font-size: 14px; }
