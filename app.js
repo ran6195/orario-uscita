@@ -60,6 +60,8 @@ const el = {
   emailInvito: $('email-invito'),
   invitoMsg: $('invito-msg'),
   invitiLista: $('inviti-lista'),
+  timerIos: $('timer-ios'),
+  avviaTimer: $('avvia-timer'),
 };
 
 let vistaCorrente = 'oggi';
@@ -273,12 +275,26 @@ function aggiornaTimerMensa() {
   el.timerMensa.hidden = false;
 }
 
+// Timer dell'Orologio (visibile nella Dynamic Island) avviato tramite un comando dell'app Comandi.
+const NOME_COMANDO_TIMER = 'Timer uscita';
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function avviaTimerIos() {
+  if (uscitaCorrenteMin == null) return;
+  const secondi = uscitaCorrenteMin * 60 - secondiAdesso();
+  if (secondi <= 0) return;
+  location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(NOME_COMANDO_TIMER)}`
+    + `&input=text&text=${secondi}`;
+}
+
 function aggiornaTempo() {
   aggiornaTimerMensa();
   const entrataMin = parseTime(el.entrata.value);
   const oggi = el.data.value === oggiISO();
 
   if (uscitaCorrenteMin == null || entrataMin == null || !oggi) {
+    el.timerIos.hidden = true;
     el.progress.hidden = true;
     el.tileCountdown.classList.remove('done');
     el.countdownLabel.textContent = 'Mancano';
@@ -292,6 +308,7 @@ function aggiornaTempo() {
   el.tileCountdown.classList.toggle('done', finito);
   el.countdownLabel.textContent = finito ? 'Puoi uscire' : 'Mancano';
   el.countdownValue.textContent = t.testo;
+  el.timerIos.hidden = !IOS || finito;
 
   const totale = (uscitaCorrenteMin - entrataMin) * 60;
   const trascorso = adessoSec - entrataMin * 60;
@@ -421,6 +438,7 @@ el.ripristina.addEventListener('click', () => {
 el.tabOggi.addEventListener('click', () => mostraVista('oggi'));
 el.tabStorico.addEventListener('click', () => mostraVista('storico'));
 el.esporta.addEventListener('click', esportaCsv);
+el.avviaTimer.addEventListener('click', avviaTimerIos);
 
 // Salva subito le modifiche in sospeso se l'app va in background o viene chiusa.
 document.addEventListener('visibilitychange', () => {

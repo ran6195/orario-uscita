@@ -224,6 +224,28 @@ main { padding: 8px 20px 32px; }
 .tile.done { background: var(--exit); color: var(--exit-text); }
 .tile.done .tile-label { color: var(--exit-text); }
 
+.timer-ios { display: flex; flex-direction: column; gap: 8px; }
+
+.timer-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  border: 1px solid var(--hero-track);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--hero-text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.timer-help { font-size: 13px; color: var(--hero-muted); }
+.timer-help summary { cursor: pointer; padding: 6px 0; }
+.timer-help ol { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.timer-help strong { color: var(--hero-text); }
+
 .result-note { margin: -6px 0 0; font-size: 13px; color: var(--hero-muted); }
 
 .warning {
