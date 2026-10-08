@@ -26,7 +26,7 @@
     </div>
     <nav class="tabs" id="tabs" role="tablist" hidden>
       <button type="button" role="tab" id="tab-oggi" aria-selected="true" aria-controls="view-oggi">Giorno</button>
-      <button type="button" role="tab" id="tab-storico" aria-selected="false" aria-controls="view-storico">Storico</button>
+      <button type="button" role="tab" id="tab-storico" aria-selected="false" aria-controls="view-storico">Storico<span class="badge" id="badge-richieste" hidden></span></button>
     </nav>
   </header>
 
@@ -49,7 +49,9 @@
       <div class="result login">
         <span class="result-label">Accesso su invito</span>
         <p class="login-text" id="noinvito-testo"></p>
-        <button type="button" class="google-btn" id="noinvito-esci">Esci e usa un altro account</button>
+        <button type="button" class="google-btn" id="richiedi-invito" hidden>Richiedi invito</button>
+        <p class="richiesta-stato" id="richiesta-stato" role="status" hidden></p>
+        <button type="button" class="timer-btn" id="noinvito-esci">Esci e usa un altro account</button>
       </div>
     </section>
 
@@ -146,6 +148,10 @@
       <ul class="history" id="lista-storico"></ul>
       <p class="empty" id="storico-vuoto" hidden>Nessun giorno salvato.</p>
       <div class="card inviti" id="inviti" hidden>
+        <div class="richieste" id="richieste" hidden>
+          <span class="card-title">Richieste di invito</span>
+          <ul class="inviti-lista" id="richieste-lista"></ul>
+        </div>
         <span class="card-title">Inviti</span>
         <form class="invito-form" id="form-invito" autocomplete="off" novalidate>
           <label class="sr-only" for="email-invito">Email da invitare</label>

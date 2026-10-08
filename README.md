@@ -62,7 +62,7 @@ Il service worker funziona solo su `localhost` o in HTTPS: aprire `index.html` d
 
 L'app è pubblicata su Firebase Hosting (progetto `orario-uscita`).
 
-1. Aumenta la versione `CACHE` in `sw.js` (es. `mensa-helper-v11` → `mensa-helper-v12`), altrimenti i telefoni continuano a usare la versione in cache.
+1. Aumenta la versione `CACHE` in `sw.js` (es. `mensa-helper-v12` → `mensa-helper-v13`), altrimenti i telefoni continuano a usare la versione in cache.
 2. Pubblica:
    ```bash
    npx firebase-tools login   # solo la prima volta
@@ -81,6 +81,7 @@ Le app già installate passano alla nuova versione al secondo avvio.
 - Al primo avvio si accede con Google. I giorni sono salvati su Firestore in `users/{uid}/giorni/{AAAA-MM-GG}`.
 - Le regole in `firestore.rules` permettono a ogni utente di leggere e scrivere solo i propri giorni.
 - L'accesso è solo su invito: la lista è nella raccolta `inviti` (ID documento = email in minuscolo). L'amministratore (UID in `firestore.rules` e `store.js`) gestisce gli inviti dalla sezione **Inviti** nello Storico. Chi non è invitato può fare login ma non accede a nessun dato.
+- Chi non è invitato può inviare una **richiesta di invito** (raccolta `richieste`, una per email). L'amministratore la vede nella sezione Inviti, con un badge sulla scheda Storico, e può approvarla o rifiutarla. Dopo l'approvazione l'app del richiedente si apre da sola.
 - Firestore tiene una copia locale (IndexedDB): l'app funziona offline e sincronizza al ritorno della rete.
 - Le modifiche vengono scritte circa un secondo dopo l'ultima modifica, oppure subito se l'app va in background.
 - Al primo login i giorni salvati in `localStorage` dalla versione precedente vengono copiati su Firestore (solo se mancano o sono più recenti). La copia locale non viene cancellata.

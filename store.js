@@ -47,6 +47,7 @@ const db = initializeFirestore(app, {
 
 const giorniRef = (uid) => collection(db, 'users', uid, 'giorni');
 const invitiRef = () => collection(db, 'inviti');
+const richiesteRef = () => collection(db, 'richieste');
 
 // Amministratore degli inviti (stesso UID della funzione admin() in firestore.rules).
 const ADMIN_UID = 'EHdWC7e44TZIzsgIuy9STAi6SuO2';
@@ -117,6 +118,52 @@ export function aggiungiInvito(email) {
 
 export function rimuoviInvito(email) {
   return deleteDoc(doc(invitiRef(), email));
+}
+
+// ---------- Richieste di invito ----------
+
+/** Data (ISO) della richiesta già inviata dall'utente, oppure null. */
+export async function miaRichiesta(user) {
+  const snap = await getDoc(doc(richiesteRef(), normalizzaEmail(user.email)));
+  return snap.exists() ? snap.data().creato : null;
+}
+
+export async function richiediInvito(user) {
+  const creato = new Date().toISOString();
+  await setDoc(doc(richiesteRef(), normalizzaEmail(user.email)), {
+    nome: (user.displayName || '').slice(0, 100),
+    uid: user.uid,
+    creato,
+  });
+  return creato;
+}
+
+/** Chiama callback() appena l'invito dell'utente esiste (es. richiesta approvata). */
+export function osservaMioInvito(user, callback) {
+  return onSnapshot(doc(invitiRef(), normalizzaEmail(user.email)), (snap) => {
+    if (snap.exists()) callback();
+  }, () => {});
+}
+
+/** Solo amministratore: callback([{ email, nome, creato }]) dalla più recente. */
+export function osservaRichieste(callback, onError) {
+  return onSnapshot(richiesteRef(), (snap) => {
+    callback(snap.docs
+      .map((d) => ({ email: d.id, nome: d.data().nome, creato: d.data().creato }))
+      .sort((a, b) => b.creato.localeCompare(a.creato)));
+  }, onError);
+}
+
+/** Crea l'invito ed elimina la richiesta in un'unica operazione. */
+export function approvaRichiesta(email) {
+  const batch = writeBatch(db);
+  batch.set(doc(invitiRef(), email), { creato: new Date().toISOString() });
+  batch.delete(doc(richiesteRef(), email));
+  return batch.commit();
+}
+
+export function rifiutaRichiesta(email) {
+  return deleteDoc(doc(richiesteRef(), email));
 }
 
 // ---------- Giorni ----------

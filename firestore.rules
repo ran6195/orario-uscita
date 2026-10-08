@@ -35,6 +35,21 @@ service cloud.firestore {
         && request.resource.data.creato is string;
     }
 
+    // Richieste di invito: ID documento = email in minuscolo dell'utente che la invia.
+    // Una sola richiesta per email; solo l'amministratore le elenca e le elimina.
+    match /richieste/{email} {
+      allow get: if admin() || (emailVerificata() && emailUtente() == email);
+      allow list, delete: if admin();
+      allow create: if emailVerificata()
+        && emailUtente() == email
+        && request.resource.data.keys().hasOnly(['nome', 'uid', 'creato'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.nome is string
+        && request.resource.data.nome.size() <= 100
+        && request.resource.data.creato is string
+        && request.resource.data.creato.size() <= 40;
+    }
+
     // Ogni utente invitato legge e scrive solo i propri giorni.
     match /users/{uid}/giorni/{data} {
       allow read, delete: if request.auth != null && request.auth.uid == uid && invitato();

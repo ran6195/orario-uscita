@@ -61,6 +61,11 @@ const el = {
   invitoMsg: $('invito-msg'),
   invitiLista: $('inviti-lista'),
   timerIos: $('timer-ios'),
+  richiediInvito: $('richiedi-invito'),
+  richiestaStato: $('richiesta-stato'),
+  richieste: $('richieste'),
+  richiesteLista: $('richieste-lista'),
+  badgeRichieste: $('badge-richieste'),
   avviaTimer: $('avvia-timer'),
 };
 
@@ -70,6 +75,8 @@ let uscitaCorrenteMin = null;
 let utente = null;
 let stopGiorni = null;
 let stopInviti = null;
+let stopRichieste = null;
+let stopMioInvito = null;
 let inviti = [];
 let giorni = {}; // copia in memoria dei giorni dell'utente, aggiornata da Firestore
 let scritturePendenti = false;
@@ -535,11 +542,10 @@ store.osservaUtente(async (u) => {
     stopGiorni();
     stopGiorni = null;
   }
-  if (stopInviti) {
-    stopInviti();
-    stopInviti = null;
-  }
+  for (const stop of [stopInviti, stopRichieste, stopMioInvito]) stop?.();
+  stopInviti = stopRichieste = stopMioInvito = null;
   el.inviti.hidden = true;
+  el.badgeRichieste.hidden = true;
   scriviOra();
   utente = u;
   giorni = {};
@@ -556,10 +562,7 @@ store.osservaUtente(async (u) => {
   const invitato = await verificaInvito(u);
   if (utente !== u) return;
   if (!invitato) {
-    el.noInvitoTesto.textContent = invitato === null
-      ? 'Non è stato possibile verificare il tuo invito. Collegati a internet e riapri l\'app.'
-      : `L'account ${u.email || ''} non è stato invitato. Chiedi un invito all'amministratore dell'app.`;
-    mostraSchermata('noinvito');
+    mostraNonInvitato(u, invitato === null);
     return;
   }
   if (store.isAdmin(u)) avviaInviti();
@@ -622,10 +625,115 @@ el.esci.addEventListener('click', () => {
   esciEricarica();
 });
 
-// ---------- Inviti (solo amministratore) ----------
+// ---------- Utente non invitato: richiesta di invito ----------
+
+function dataOra(iso) {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString('it-IT')} alle ${d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function mostraStatoRichiesta(creato) {
+  el.richiediInvito.hidden = true;
+  el.richiestaStato.textContent = `Richiesta inviata il ${dataOra(creato)}. Potrai entrare appena sarà approvata.`;
+  el.richiestaStato.hidden = false;
+}
+
+async function mostraNonInvitato(u, nonVerificabile) {
+  el.richiediInvito.hidden = true;
+  el.richiestaStato.hidden = true;
+  mostraSchermata('noinvito');
+  if (nonVerificabile) {
+    el.noInvitoTesto.textContent = 'Non è stato possibile verificare il tuo invito. Collegati a internet e riapri l\'app.';
+    return;
+  }
+  el.noInvitoTesto.textContent = `L'account ${u.email || ''} non è ancora stato invitato.`;
+
+  // Appena l'invito viene creato (richiesta approvata) si entra nell'app.
+  stopMioInvito = store.osservaMioInvito(u, () => location.reload());
+
+  try {
+    const creato = await conTimeout(store.miaRichiesta(u));
+    if (utente !== u) return;
+    if (creato) mostraStatoRichiesta(creato);
+    else el.richiediInvito.hidden = false;
+  } catch (e) {
+    console.warn('Stato richiesta non disponibile', e);
+    if (utente === u) el.richiediInvito.hidden = false;
+  }
+}
+
+el.richiediInvito.addEventListener('click', async () => {
+  if (!utente) return;
+  el.richiediInvito.disabled = true;
+  try {
+    mostraStatoRichiesta(await conTimeout(store.richiediInvito(utente)));
+  } catch (e) {
+    console.error(e);
+    el.richiestaStato.textContent = e?.code === 'permission-denied'
+      ? 'Hai già inviato una richiesta: è in attesa di approvazione.'
+      : 'Invio non riuscito. Controlla la connessione e riprova.';
+    el.richiestaStato.hidden = false;
+  } finally {
+    el.richiediInvito.disabled = false;
+  }
+});
+
+// ---------- Inviti e richieste (solo amministratore) ----------
+
+function renderRichieste(lista) {
+  el.richieste.hidden = !lista.length;
+  el.badgeRichieste.hidden = !lista.length;
+  el.badgeRichieste.textContent = String(lista.length);
+  el.tabStorico.setAttribute('aria-label', lista.length ? `Storico, ${lista.length} richieste di invito` : 'Storico');
+  el.richiesteLista.replaceChildren();
+
+  for (const r of lista) {
+    const li = crea('li');
+    const info = crea('span', 'richiesta-info');
+    info.append(
+      crea('span', 'email', r.email),
+      crea('span', 'meta', `${r.nome ? `${r.nome} · ` : ''}${dataOra(r.creato)}`),
+    );
+
+    const azioni = crea('span', 'richiesta-azioni');
+    const approva = crea('button', 'pill-btn', 'Approva');
+    approva.type = 'button';
+    approva.setAttribute('aria-label', `Approva ${r.email}`);
+    approva.addEventListener('click', () => {
+      approva.disabled = true;
+      // Se l'email è già invitata basta eliminare la richiesta.
+      const operazione = inviti.includes(r.email) ? store.rifiutaRichiesta : store.approvaRichiesta;
+      operazione(r.email)
+        .then(() => mostraMsgInvito(`${r.email} ora può accedere.`))
+        .catch((e) => {
+          console.error(e);
+          approva.disabled = false;
+          mostraMsgInvito('Approvazione non riuscita.', true);
+        });
+    });
+    const rifiuta = crea('button', 'pill-btn rifiuta', 'Rifiuta');
+    rifiuta.type = 'button';
+    rifiuta.setAttribute('aria-label', `Rifiuta ${r.email}`);
+    rifiuta.addEventListener('click', () => {
+      if (!confirm(`Rifiutare la richiesta di ${r.email}?`)) return;
+      store.rifiutaRichiesta(r.email).catch((e) => {
+        console.error(e);
+        mostraMsgInvito('Operazione non riuscita.', true);
+      });
+    });
+    azioni.append(approva, rifiuta);
+
+    li.append(info, azioni);
+    el.richiesteLista.append(li);
+  }
+}
 
 function avviaInviti() {
   el.inviti.hidden = false;
+  stopRichieste = store.osservaRichieste(renderRichieste, (e) => {
+    console.error(e);
+    mostraMsgInvito('Impossibile leggere le richieste.', true);
+  });
   stopInviti = store.osservaInviti((lista) => {
     inviti = lista;
     renderInviti();
