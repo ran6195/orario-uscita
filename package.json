@@ -1,0 +1,11 @@
+{
+  "name": "mensa-helper",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "npx serve .",
+    "deploy": "npx firebase-tools deploy --only hosting"
+  }
+}

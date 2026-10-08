@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Orario Uscita</title>
+  <meta name="description" content="Calcola l'orario di uscita dal lavoro e tieni lo storico giornaliero.">
+  <meta name="theme-color" content="#FBF5EE" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1A120D" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Uscita">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="heading">
+      <span class="eyebrow" id="eyebrow"></span>
+      <h1>Orario Uscita</h1>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" id="tab-oggi" aria-selected="true" aria-controls="view-oggi">Giorno</button>
+      <button type="button" role="tab" id="tab-storico" aria-selected="false" aria-controls="view-storico">Storico</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="view-oggi" class="view" role="tabpanel" aria-labelledby="tab-oggi">
+      <div class="result">
+        <div class="result-head">
+          <span class="result-label">Puoi uscire alle</span>
+          <span class="chip" id="salvato" aria-live="polite" hidden></span>
+        </div>
+        <div class="result-time" id="uscita" aria-live="polite">--:--</div>
+
+        <div class="progress" id="progress" hidden>
+          <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+          <div class="progress-legend">
+            <span id="progress-entrata"></span>
+            <span id="progress-pct"></span>
+          </div>
+        </div>
+
+        <div class="tiles">
+          <div class="tile" id="tile-countdown">
+            <span class="tile-label" id="countdown-label">Mancano</span>
+            <span class="tile-value" id="countdown-value">—</span>
+          </div>
+          <div class="tile">
+            <span class="tile-label" id="pausa-label">Pausa</span>
+            <span class="tile-value" id="pausa-value" aria-live="polite">—</span>
+          </div>
+        </div>
+
+        <p class="result-note" id="nota" hidden></p>
+        <p class="warning" id="avviso" role="status" hidden></p>
+      </div>
+
+      <form class="card card-rows" id="form-giorno" autocomplete="off" onsubmit="return false">
+        <label class="row-field">
+          <span>Data</span>
+          <input type="date" id="data" required>
+        </label>
+        <label class="row-field">
+          <span>Entrata</span>
+          <input type="time" id="entrata">
+        </label>
+      </form>
+
+      <div class="card card-mensa">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="card-title">Mensa</span>
+            <span class="lunch-timer" id="timer-mensa" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <span id="timer-mensa-testo"></span>
+            </span>
+          </div>
+          <button type="button" class="pill-btn" id="ripristina">Ripristina default</button>
+        </div>
+        <div class="mensa-grid">
+          <label class="mini-field">
+            <span>Inizio</span>
+            <input type="time" id="inizio-mensa">
+          </label>
+          <label class="mini-field">
+            <span>Fine</span>
+            <input type="time" id="fine-mensa">
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-storico" class="view" role="tabpanel" aria-labelledby="tab-storico" hidden>
+      <div class="history-head">
+        <span class="history-count" id="conteggio"></span>
+        <button type="button" class="export-btn" id="esporta">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          Esporta CSV
+        </button>
+      </div>
+      <ul class="history" id="lista-storico"></ul>
+      <p class="empty" id="storico-vuoto" hidden>Nessun giorno salvato.</p>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
